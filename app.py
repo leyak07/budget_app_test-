@@ -15,7 +15,7 @@ def charger_transactions():
 
 def sauvegarder_transactions(transactions):
     with open(FICHIER, mode='w', newline='', encoding='utf-8') as f:
-        fieldnames = ['type', 'montant', 'description', 'categorie', 'date']
+        fieldnames = ['type', 'montant', 'categorie', 'date']
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for t in transactions:
@@ -23,14 +23,14 @@ def sauvegarder_transactions(transactions):
 
 transactions = charger_transactions()
 
-st.title("Gestionnaire de Budget 💸")
+st.title("Gestionnaire de Budget avec Catégories")
 
-# Formulaire d'ajout de transaction
+categories = ["Alimentation", "Transport", "Logement", "Divertissement", "Salaire", "Autres"]
+
 with st.form("ajouter_transaction"):
     type_trans = st.selectbox("Type", ["revenu", "depense"])
     montant = st.number_input("Montant", min_value=0.0, format="%.2f")
-    description = st.text_input("Description")
-    categorie = st.selectbox("Catégorie", ["Nourriture", "Transport", "Santé", "Loisirs", "Autres"])
+    categorie = st.selectbox("Catégorie", categories)
     submit = st.form_submit_button("Ajouter")
 
     if submit:
@@ -38,22 +38,14 @@ with st.form("ajouter_transaction"):
             nouvelle_transaction = {
                 "type": type_trans,
                 "montant": str(montant),
-                "description": description,
                 "categorie": categorie,
                 "date": datetime.now().strftime("%Y-%m-%d")
             }
             transactions.append(nouvelle_transaction)
             sauvegarder_transactions(transactions)
-            st.success("✅ Transaction ajoutée avec succès.")
+            st.success("✅ Transaction ajoutée.")
         else:
             st.error("❌ Le montant doit être supérieur à 0.")
-
-# Bouton de réinitialisation
-if st.button("🗑️ Réinitialiser l'historique"):
-    if os.path.exists(FICHIER):
-        os.remove(FICHIER)
-    transactions.clear()
-    st.success("🧹 Historique supprimé. Vous pouvez recommencer à zéro.")
 
 # Calcul du solde
 solde = 0
@@ -64,36 +56,39 @@ for t in transactions:
     else:
         solde -= montant
 
-st.write(f"### 💰 Solde actuel : {solde:.2f} MAD")
+st.write(f"### Solde actuel : {solde:.2f} MAD")
 
-# Affichage historique sécurisé (sans erreur même si le CSV est incomplet)
+# Affichage historique
 if transactions:
-    st.write("### 📜 Historique des transactions")
+    st.write("### Historique")
     for t in transactions:
-        st.write(
-            f"{t.get('date', '❓')} | {t['type']} | {t['montant']} MAD | {t.get('categorie', 'Non précisé')} | {t['description']}"
-        )
+        st.write(f"{t['date']} | {t['type']} | {t['montant']} MAD | {t['categorie']}")
 else:
-    st.write("ℹ️ Aucune transaction pour l’instant.")
+    st.write("Aucune transaction pour l’instant.")
 
-# Graphique camembert des dépenses par catégorie
-st.write("### 📊 Répartition des dépenses par catégorie")
+# --- Graphique de répartition par catégorie ---
 
-depenses = [t for t in transactions if t["type"] == "depense"]
+# Préparer les données
+depenses = {}
+revenus = {}
 
+for t in transactions:
+    cat = t["categorie"]
+    montant = float(t["montant"])
+    if t["type"] == "depense":
+        depenses[cat] = depenses.get(cat, 0) + montant
+    else:
+        revenus[cat] = revenus.get(cat, 0) + montant
+
+# Afficher les graphiques seulement s'il y a des données
 if depenses:
-    categories = {}
-    for d in depenses:
-        cat = d.get("categorie", "Autres")
-        montant = float(d["montant"])
-        categories[cat] = categories.get(cat, 0) + montant
+    fig1, ax1 = plt.subplots()
+    ax1.pie(depenses.values(), labels=depenses.keys(), autopct='%1.1f%%', startangle=90)
+    ax1.set_title("Répartition des dépenses par catégorie")
+    st.pyplot(fig1)
 
-    labels = list(categories.keys())
-    values = list(categories.values())
-
-    fig, ax = plt.subplots()
-    ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')  # cercle parfait
-    st.pyplot(fig)
-else:
-    st.info("ℹ️ Aucune dépense enregistrée pour le graphique.")
+if revenus:
+    fig2, ax2 = plt.subplots()
+    ax2.pie(revenus.values(), labels=revenus.keys(), autopct='%1.1f%%', startangle=90)
+    ax2.set_title("Répartition des revenus par catégorie")
+    st.pyplot(fig2)
